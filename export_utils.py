@@ -136,7 +136,7 @@ def generate_grid_plot(
     # Col 1: Start (S) & Target (T) [Endpoints]
     # Col 2: Left Chain & Right Chain [Funnel Boundaries]
     # Col 3: Apex & Shortest Path [Search Apex & Solution Path]
-    # Col 4: Crossing Sightline & Crossed Segment [Boundary Crossing Event]
+    # Col 4: Candidate Sightline & Crossed Corner [Boundary Crossing Event]
     # Col 5: Polygon Boundary & Diagonals [Polygon Geometry & Triangulation]
     # Col 6: Corridor Triangles & Corridor Path (S→T) [Corridor Strip & Tree Route]
     # Col 7: Dual Nodes & Dual Tree Edges [Triangulation Dual Tree]
@@ -150,8 +150,8 @@ def generate_grid_plot(
         Line2D([0], [0], marker='o', color='none', markerfacecolor='#ea580c', markeredgecolor='#ea580c', markersize=7, label='Apex'),
         Line2D([0], [0], color='#dc2626', lw=2.2, label='Shortest Path'),
 
-        Line2D([0], [0], color='#e11d48', lw=2, linestyle='--', label='Crossing Sightline'),
-        Line2D([0], [0], color='#be185d', lw=3, label='Crossed Segment'),
+        Line2D([0], [0], color='#0284c7', lw=2, linestyle='--', label='Candidate Sightline'),
+        Line2D([0], [0], marker='o', color='none', markerfacecolor='#dc2626', markeredgecolor='#dc2626', markersize=7.5, label='Crossed Corner'),
 
         Line2D([0], [0], color='#1e40af', lw=2.5, label='Polygon Boundary'),
         Line2D([0], [0], color='#c3cdda', lw=1.5, linestyle='--', label='Diagonals'),

@@ -159,17 +159,15 @@ class MatplotlibFunnelApp:
 
             # Crossing visualization (line crossed before apex moves)
             if st.is_crossing_step and st.crossing_line and st.crossed_segment and st.crossing_point:
-                # Crossed boundary segment
-                cs = st.crossed_segment
-                self.ax.plot([cs[0][0], cs[1][0]], [cs[0][1], cs[1][1]], color='#be185d', linewidth=3.5, label="Crossed Boundary")
+                cand_color = '#0284c7' if st.crossing_side == 'left' else '#16a34a'
 
-                # Candidate sightline crossing the boundary
+                # Candidate sightline crossing the boundary (in candidate chain color)
                 cl = st.crossing_line
-                self.ax.plot([cl[0][0], cl[1][0]], [cl[0][1], cl[1][1]], color='#e11d48', linestyle='--', linewidth=2, label="Crossing Line")
+                self.ax.plot([cl[0][0], cl[1][0]], [cl[0][1], cl[1][1]], color=cand_color, linestyle='--', linewidth=2, label="Candidate Line")
 
-                # Crossing point marker (clean dot, no exaggerated text)
+                # Crossing point marker (clean dot at the crossed corner)
                 cp = st.crossing_point
-                self.ax.plot(cp[0], cp[1], marker='o', markersize=7, color='#e11d48')
+                self.ax.plot(cp[0], cp[1], marker='o', markersize=7, color='#dc2626')
 
             # Apex
             self.ax.plot(st.apex[0], st.apex[1], color='#ea580c', marker='*', markersize=12, label="Apex")

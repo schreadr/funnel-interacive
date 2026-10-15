@@ -222,7 +222,7 @@ class FunnelAlgorithm:
                             crossing_line=(apex, new_l),
                             crossed_segment=(apex, corner),
                             crossing_point=corner,
-                            crossing_side="right"
+                            crossing_side="left"
                         )
                     )
 
@@ -325,7 +325,7 @@ class FunnelAlgorithm:
                             crossing_line=(apex, new_r),
                             crossed_segment=(apex, corner),
                             crossing_point=corner,
-                            crossing_side="left"
+                            crossing_side="right"
                         )
                     )
 

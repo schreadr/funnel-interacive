@@ -794,22 +794,18 @@ class FunnelInteractiveApp:
 
         # --- Crossing Visualization (Clean, non-exaggerated) ---
         if curr.is_crossing_step and curr.crossing_line and curr.crossed_segment and curr.crossing_point:
-            # Highlight the boundary segment that is being crossed
-            draw_aa_line(
-                self.screen, COLOR_CROSSED_SEG,
-                curr.crossed_segment[0], curr.crossed_segment[1],
-                width=3.5 * self.scale
-            )
+            # Candidate sightline is colored according to the chain it attempts to extend
+            cand_color = COLOR_LEFT_CHAIN if curr.crossing_side == "left" else COLOR_RIGHT_CHAIN
 
-            # Draw the candidate line from Apex to portal vertex crossing the boundary
+            # Draw the candidate line from Apex to portal vertex in the candidate chain color
             draw_dashed_aa_line(
-                self.screen, COLOR_CROSSING_LINE,
+                self.screen, cand_color,
                 curr.crossing_line[0], curr.crossing_line[1],
                 width=2.0 * self.scale,
                 dash_length=6.0 * self.scale,
                 space_length=4.0 * self.scale
             )
-            draw_aa_circle(self.screen, COLOR_CROSSING_LINE, curr.crossing_line[1], 4.5 * self.scale)
+            draw_aa_circle(self.screen, cand_color, curr.crossing_line[1], 4.5 * self.scale)
 
             # Clean neat marker at the corner where the line crosses
             draw_aa_circle(self.screen, COLOR_BG, curr.crossing_point, 6.0 * self.scale)
@@ -889,7 +885,7 @@ class FunnelInteractiveApp:
                 ("Apex", COLOR_APEX),
                 ("Left Chain", COLOR_LEFT_CHAIN),
                 ("Right Chain", COLOR_RIGHT_CHAIN),
-                ("Crossing Line", COLOR_CROSSING_LINE),
+                ("Crossed Corner", COLOR_CROSSING_POINT),
                 ("Shortest Path", COLOR_PATH),
             ]
             lx = self.width - int(560 * self.scale)
