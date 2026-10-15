@@ -5,6 +5,7 @@ and the step-by-step Funnel Algorithm.
 
 import unittest
 import math
+import os
 from geometry import (
     dist, cross2d, is_simple_polygon, is_point_in_polygon,
     is_point_in_triangle, triangulate_ear_clipping,
@@ -243,8 +244,31 @@ class TestGeometryAndFunnel(unittest.TestCase):
             next_state = solver.states[c_idx + 1]
             self.assertEqual(next_state.apex, c_state.crossing_point)
 
+    def test_export_utils_and_grid_plot(self):
+        import pygame
+        import tempfile
+        from export_utils import StepRecorder, capture_canvas, generate_grid_plot
+
+        pygame.init()
+        screen = pygame.Surface((400, 300))
+        screen.fill((255, 255, 255))
+        cropped = capture_canvas(screen, header_height=40, footer_height=50)
+        self.assertEqual(cropped.get_size(), (400, 210))
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            recorder = StepRecorder(base_folder=tmp_dir)
+            p1 = recorder.capture_step(screen, 40, 50, "step0", "Step 0: Initial")
+            p2 = recorder.capture_step(screen, 40, 50, "step1", "Step 1: Complete")
+            self.assertTrue(os.path.exists(p1))
+            self.assertTrue(os.path.exists(p2))
+
+            grid_path = recorder.build_grid_plot(title="Unit Test Grid")
+            self.assertTrue(os.path.exists(grid_path))
+            self.assertGreater(os.path.getsize(grid_path), 1000)
+
 
 if __name__ == '__main__':
     unittest.main()
+
 
 

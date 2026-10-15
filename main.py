@@ -23,6 +23,7 @@ from geometry import (
     segments_intersect, get_dual_tree, get_dual_corridor_path
 )
 from funnel import FunnelAlgorithm, FunnelState
+from export_utils import StepRecorder, save_canvas_screenshot, generate_grid_plot
 
 # Enable SDL high-DPI scaling hints with crisp nearest filtering (no linear blur)
 os.environ["SDL_HINT_VIDEO_HIGHDPI_DISABLED"] = "0"
@@ -178,7 +179,14 @@ def draw_dashed_aa_line(
 
 class FunnelInteractiveApp:
 
-    def __init__(self, width: int = 1920, height: int = 1080, fullscreen: bool = False):
+    def __init__(
+        self,
+        width: int = 1920,
+        height: int = 1080,
+        fullscreen: bool = False,
+        record_mode: bool = False,
+        screenshot_folder: Optional[str] = None
+    ):
         pygame.init()
         pygame.display.set_caption("Shortest Paths in Simple Polygons — Interactive Funnel Algorithm")
 
@@ -194,6 +202,10 @@ class FunnelInteractiveApp:
 
         self.clock = pygame.time.Clock()
         self._update_scale_and_fonts()
+
+        # Step Recording & Screenshot Mode
+        self.record_mode = record_mode
+        self.recorder = StepRecorder(base_folder=screenshot_folder, auto_record=record_mode)
 
         # State Variables
         self.state = STATE_DRAW_POLYGON
@@ -337,20 +349,20 @@ class FunnelInteractiveApp:
                 (cx - int(380 * s), cy + int(260 * s)),
             ]
         elif preset_id == 3:
-            # Spiral / S-shaped polygon
+            # S-shaped labyrinth corridor with two internal baffles
             self.vertices = [
-                (cx - int(380 * s), cy - int(240 * s)),
-                (cx + int(380 * s), cy - int(240 * s)),
-                (cx + int(380 * s), cy - int(70 * s)),
-                (cx - int(160 * s), cy - int(70 * s)),
-                (cx - int(160 * s), cy + int(90 * s)),
-                (cx + int(380 * s), cy + int(90 * s)),
-                (cx + int(380 * s), cy + int(260 * s)),
-                (cx - int(380 * s), cy + int(260 * s)),
-                (cx - int(380 * s), cy + int(110 * s)),
-                (cx + int(160 * s), cy + int(110 * s)),
-                (cx + int(160 * s), cy - int(90 * s)),
-                (cx - int(380 * s), cy - int(90 * s)),
+                (cx - int(360 * s), cy - int(200 * s)),
+                (cx + int(360 * s), cy - int(200 * s)),
+                (cx + int(360 * s), cy + int(60 * s)),
+                (cx - int(150 * s), cy + int(60 * s)),
+                (cx - int(150 * s), cy + int(100 * s)),
+                (cx + int(360 * s), cy + int(100 * s)),
+                (cx + int(360 * s), cy + int(220 * s)),
+                (cx - int(360 * s), cy + int(220 * s)),
+                (cx - int(360 * s), cy - int(60 * s)),
+                (cx + int(150 * s), cy - int(60 * s)),
+                (cx + int(150 * s), cy - int(100 * s)),
+                (cx - int(360 * s), cy - int(100 * s)),
             ]
 
         self._close_polygon_and_triangulate()
@@ -445,6 +457,97 @@ class FunnelInteractiveApp:
                     f"Press ENTER to view the Funnel Algorithm."
                 )
 
+                if self.record_mode:
+                    self.recorder.reset_session()
+                    self.screen.fill(COLOR_BG)
+                    self.draw_polygon_and_triangulation()
+                    self.draw_dual_tree()
+                    self.draw_start_and_target()
+                    self.recorder.capture_step(
+                        self.screen, self.header_height, self.footer_height,
+                        "00_dual_tree", "Step 0: Dual Tree & Corridor Path"
+                    )
+
+    def export_all_steps_grid(self, custom_folder: Optional[str] = None) -> Optional[str]:
+        """
+        Automatically steps through the entire funnel algorithm for current polygon and S/T,
+        captures cropped screenshots for each step (drawing only), compiles a grid plot with a unified legend,
+        and restores the application state.
+        """
+        if not self.funnel_solver or not self.portals or self.start_point is None or self.target_point is None:
+            self.set_warning("Must declare polygon, Start (S), and Target (T) first!")
+            return None
+
+        prev_state = self.state
+        prev_step_idx = self.funnel_solver.current_step_index
+
+        rec = StepRecorder(base_folder=custom_folder)
+        rec.reset_session(custom_folder)
+
+        # 1. Capture Step 0: Dual Tree & Corridor
+        self.state = STATE_SHOW_DUAL_TREE
+        self.screen.fill(COLOR_BG)
+        self.draw_polygon_and_triangulation()
+        self.draw_dual_tree()
+        self.draw_start_and_target()
+        rec.capture_step(
+            self.screen, self.header_height, self.footer_height,
+            "00_dual_tree", "Step 0: Dual Tree & Corridor Path"
+        )
+
+        # 2. Iterate through all Funnel states
+        self.state = STATE_STEPPING
+        solver = FunnelAlgorithm(self.portals)
+        total_steps = solver.total_steps
+
+        for step_i in range(total_steps):
+            self.funnel_solver = solver
+            curr = solver.current_state
+
+            self.screen.fill(COLOR_BG)
+            self.draw_polygon_and_triangulation()
+            self.draw_dual_tree()
+            self.draw_funnel_state()
+            self.draw_start_and_target()
+
+            step_num = step_i + 1
+            if step_i == total_steps - 1:
+                caption = f"Step {step_num}: Path Complete ({curr.path_length:.1f})"
+                tag = f"{step_num:02d}_complete"
+            elif curr.is_crossing_step:
+                caption = f"Step {step_num}: Sightline Crosses Boundary"
+                tag = f"{step_num:02d}_crossing"
+            elif step_i == 0:
+                caption = f"Step 1: Funnel Initialized at S"
+                tag = f"01_init"
+            else:
+                caption = f"Step {step_num}: Portal {curr.portal_idx} Updated"
+                tag = f"{step_num:02d}_step"
+
+            rec.capture_step(
+                self.screen, self.header_height, self.footer_height,
+                tag, caption
+            )
+
+            if not solver.is_finished:
+                solver.step_forward()
+
+        # 3. Build Grid Plot with unified legend
+        poly_n = len(self.ccw_poly)
+        grid_file = rec.build_grid_plot(
+            title=f"Funnel Algorithm Step-by-Step ({poly_n} Vertices, Path Length: {solver.current_state.path_length:.2f})"
+        )
+
+        # 4. Restore original state
+        self.state = prev_state
+        self.funnel_solver = FunnelAlgorithm(self.portals)
+        for _ in range(prev_step_idx):
+            if not self.funnel_solver.is_finished:
+                self.funnel_solver.step_forward()
+
+        self.status_message = f"Screenshots ({len(rec.recorded_steps)}) & grid saved: {grid_file}"
+        return grid_file
+
     def handle_keydown(self, key: int):
         if key == pygame.K_ESCAPE:
             pygame.quit()
@@ -469,6 +572,14 @@ class FunnelInteractiveApp:
 
         elif key == pygame.K_r:
             self.reset()
+
+        elif key in (pygame.K_p, pygame.K_g):
+            self.export_all_steps_grid()
+
+        elif key == pygame.K_s:
+            self.record_mode = not self.record_mode
+            status_txt = "ON" if self.record_mode else "OFF"
+            self.status_message = f"Step screenshot recording is now {status_txt}. (Press 'P' to export all steps immediately)."
 
         elif key in (pygame.K_1, pygame.K_2, pygame.K_3):
             preset_map = {pygame.K_1: 1, pygame.K_2: 2, pygame.K_3: 3}
@@ -507,6 +618,16 @@ class FunnelInteractiveApp:
                     f"[Step 0/{curr.total_steps - 1}] {curr.description} "
                     f"(Press ENTER to continue)"
                 )
+                if self.record_mode:
+                    self.screen.fill(COLOR_BG)
+                    self.draw_polygon_and_triangulation()
+                    self.draw_dual_tree()
+                    self.draw_funnel_state()
+                    self.draw_start_and_target()
+                    self.recorder.capture_step(
+                        self.screen, self.header_height, self.footer_height,
+                        "01_funnel_init", "Step 1: Funnel Initialized at S"
+                    )
 
             elif self.state == STATE_STEPPING and self.funnel_solver:
                 if not self.funnel_solver.is_finished:
@@ -521,6 +642,31 @@ class FunnelInteractiveApp:
                             f"[Step {new_st.step_number}/{new_st.total_steps - 1}] {new_st.description} "
                             f"(Press ENTER to continue)"
                         )
+
+                    if self.record_mode:
+                        self.screen.fill(COLOR_BG)
+                        self.draw_polygon_and_triangulation()
+                        self.draw_dual_tree()
+                        self.draw_funnel_state()
+                        self.draw_start_and_target()
+                        step_num = new_st.step_number + 1
+                        if self.funnel_solver.is_finished:
+                            self.recorder.capture_step(
+                                self.screen, self.header_height, self.footer_height,
+                                f"{step_num:02d}_complete", f"Step {step_num}: Path Complete (Length: {new_st.path_length:.1f})"
+                            )
+                            grid_p = self.recorder.build_grid_plot()
+                            self.status_message = f"[Complete] Grid plot saved to: {grid_p}"
+                        elif new_st.is_crossing_step:
+                            self.recorder.capture_step(
+                                self.screen, self.header_height, self.footer_height,
+                                f"{step_num:02d}_crossing", f"Step {step_num}: Sightline Crosses Boundary"
+                            )
+                        else:
+                            self.recorder.capture_step(
+                                self.screen, self.header_height, self.footer_height,
+                                f"{step_num:02d}_step", f"Step {step_num}: Portal {new_st.portal_idx} Updated"
+                            )
                 else:
                     self.state = STATE_FINISHED
 
@@ -722,6 +868,11 @@ class FunnelInteractiveApp:
         phase_surf = self.font_bold.render(phase_text, True, badge_color)
         self.screen.blit(phase_surf, (int(20 * self.scale), int(38 * self.scale)))
 
+        # Live Recording Mode indicator
+        if self.record_mode:
+            rec_badge = self.font_bold.render("● REC", True, (220, 38, 38))
+            self.screen.blit(rec_badge, (int(210 * self.scale), int(38 * self.scale)))
+
         # Legend on top right
         if self.state == STATE_SHOW_DUAL_TREE:
             legend_items = [
@@ -737,18 +888,18 @@ class FunnelInteractiveApp:
                 lx += int(160 * self.scale)
         else:
             legend_items = [
-                ("Left Chain (thick)", COLOR_LEFT_CHAIN),
-                ("Right Chain (thick)", COLOR_RIGHT_CHAIN),
+                ("Left Chain", COLOR_LEFT_CHAIN),
+                ("Right Chain", COLOR_RIGHT_CHAIN),
                 ("Apex", COLOR_APEX),
                 ("Crossing Line", COLOR_CROSSING_LINE),
-                ("Path (thin)", COLOR_PATH),
+                ("Shortest Path", COLOR_PATH),
             ]
-            lx = self.width - int(660 * self.scale)
+            lx = self.width - int(560 * self.scale)
             for name, col in legend_items:
                 draw_aa_circle(self.screen, col, (lx, int(32 * self.scale)), 5.0 * self.scale)
                 txt = self.font_small.render(name, True, COLOR_TEXT_SECONDARY)
                 self.screen.blit(txt, (lx + int(10 * self.scale), int(24 * self.scale)))
-                lx += int(128 * self.scale)
+                lx += int(112 * self.scale)
 
         # Bottom Panel Bar
         panel_y = self.height - self.footer_height
@@ -763,9 +914,13 @@ class FunnelInteractiveApp:
             msg_surf = self.font_normal.render(self.status_message, True, COLOR_TEXT_PRIMARY)
         self.screen.blit(msg_surf, (int(20 * self.scale), panel_y + int(12 * self.scale)))
 
-        # Instructions / Controls Hint (including resolution and fullscreen shortcuts)
+        # Instructions / Controls Hint (including resolution, export, and recording shortcuts)
         res_info = f"{self.width}x{self.height}"
-        controls = f"[ENTER]: Next Step | [←/Backspace]: Step Back | [R]: Reset | [1/2/3]: Presets | [F]: Fullscreen | [+/-]: Res ({res_info})"
+        rec_status = "ON" if self.record_mode else "OFF"
+        controls = (
+            f"[ENTER]: Next | [←]: Back | [P]: Export Grid | "
+            f"[S]: Rec ({rec_status}) | [1/2/3]: Presets | [F]: Fullscreen | [+/-]: Res ({res_info})"
+        )
         ctrl_surf = self.font_small.render(controls, True, COLOR_TEXT_SECONDARY)
         self.screen.blit(ctrl_surf, (int(20 * self.scale), panel_y + int(44 * self.scale)))
 
@@ -811,6 +966,18 @@ def parse_args():
     parser.add_argument("--width", type=int, default=None, help="Window width in pixels")
     parser.add_argument("--height", type=int, default=None, help="Window height in pixels")
     parser.add_argument("--fullscreen", action="store_true", help="Start in native fullscreen mode")
+    parser.add_argument(
+        "--record", nargs="?", const="", default=None,
+        help="Enable step screenshot recording mode (optional: output folder path)"
+    )
+    parser.add_argument(
+        "--screenshots", nargs="?", const="", default=None,
+        help="Alias for --record (optional: output folder path)"
+    )
+    parser.add_argument(
+        "--export-grid", type=int, choices=[1, 2, 3], default=None,
+        help="Load preset (1, 2, or 3), export all step screenshots and grid_plot.png, then exit"
+    )
     return parser.parse_args()
 
 
@@ -860,5 +1027,31 @@ if __name__ == "__main__":
     if args.height:
         height = args.height
 
-    app = FunnelInteractiveApp(width=width, height=height, fullscreen=args.fullscreen)
+    rec_arg = args.record if args.record is not None else args.screenshots
+    record_mode = rec_arg is not None
+    rec_folder = rec_arg if (rec_arg and len(rec_arg) > 0) else None
+
+    app = FunnelInteractiveApp(
+        width=width, height=height, fullscreen=args.fullscreen,
+        record_mode=record_mode, screenshot_folder=rec_folder
+    )
+
+    if args.export_grid is not None:
+        app.load_preset(args.export_grid)
+        cx, cy = app.width // 2, app.height // 2
+        s = app.scale
+        if args.export_grid == 1:
+            app.handle_mouse_click((cx - int(220 * s), cy - int(140 * s)), 1)
+            app.handle_mouse_click((cx + int(220 * s), cy + int(140 * s)), 1)
+        elif args.export_grid == 2:
+            app.handle_mouse_click((cx - int(280 * s), cy - int(160 * s)), 1)
+            app.handle_mouse_click((cx + int(280 * s), cy - int(160 * s)), 1)
+        elif args.export_grid == 3:
+            app.handle_mouse_click((cx - int(280 * s), cy - int(150 * s)), 1)
+            app.handle_mouse_click((cx - int(280 * s), cy + int(160 * s)), 1)
+
+        grid_path = app.export_all_steps_grid(custom_folder=rec_folder)
+        print(f"Exported all steps and generated grid plot at:\n  {grid_path}")
+        sys.exit(0)
+
     app.run()

@@ -55,12 +55,39 @@ Or run directly using the venv Python binary:
 | **Show Funnel (after Dual Tree)** | `ENTER` or `SPACE` |
 | **Execute Next Step** | `ENTER` or `SPACE` |
 | **Step Backward** | `Left Arrow` ($\leftarrow$) or `Backspace` |
+| **Export All Steps Grid Plot** | `P` or `G` (exports cropped step screenshots & `grid_plot.png`) |
+| **Toggle Live Step Recording** | `S` (captures drawing on each forward step) |
 | **Toggle Fullscreen** | `F` or `F11` (native 1:1 pixel rendering) |
 | **Increase Resolution Preset** | `+` / `=` (720p → 900p → 1080p → 1440p → 4K) |
 | **Decrease Resolution Preset** | `-` |
 | **Reset / New Polygon** | `R` |
 | **Load Preset Corridor** | `1` (L-shape), `2` (U-shape), `3` (S-shape) |
 | **Quit** | `ESC` or Close window |
+
+### Step Screenshots & Grid Plot Export
+
+You can record every step or export a unified step-by-step summary grid plot (drawing area only, without UI header/footer bars):
+
+```bash
+# 1. Start with live step recording enabled
+.venv/bin/python main.py --record screenshots/my_run
+
+# 2. Automatically load a preset, export all steps, and generate grid_plot.png
+.venv/bin/python main.py --export-grid 1 --screenshots screenshots/preset1
+.venv/bin/python main.py --export-grid 2 --screenshots screenshots/preset2
+.venv/bin/python main.py --export-grid 3 --screenshots screenshots/preset3
+
+# 3. Interactive shortcut:
+# Press 'P' at any time while running to export all steps and the grid plot!
+```
+
+The exported folder contains:
+- `step_00_dual_tree.png`: Pure drawing of the triangulation dual tree and corridor path.
+- `step_01_funnel_init.png`: Initial funnel state at Start $S$.
+- `step_XX_step.png`: Intermediate funnel states and portal updates.
+- `step_XX_crossing.png`: Explicit crossing detection before apex moves.
+- `step_XX_complete.png`: Complete shortest path to Target $T$.
+- `grid_plot.png`: Publication-ready grid figure compiling all step drawings with titles and a comprehensive unified legend.
 
 ### High Resolution & Launch Options
 
