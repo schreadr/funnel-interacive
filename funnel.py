@@ -136,7 +136,7 @@ class FunnelAlgorithm:
                     portal_idx=1,
                     portal=(t, t),
                     path_so_far=path,
-                    description=f"Direct line of sight: Connected S to T! Path length: {length:.2f}",
+                    description="Direct line of sight: Connected S to T! Shortest path complete.",
                     is_complete=True,
                     path_length=length
                 )
@@ -504,7 +504,7 @@ class FunnelAlgorithm:
                 portal_idx=num_portals - 1,
                 portal=self.portals[-1],
                 path_so_far=list(path),
-                description=f"Final Step: Direct connection from final Apex to Target T! Shortest path complete. Total length: {final_length:.2f}",
+                description="Final Step: Direct connection from final Apex to Target T! Shortest path complete.",
                 is_complete=True,
                 path_length=final_length
             )

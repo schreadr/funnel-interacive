@@ -49,7 +49,7 @@ def save_canvas_screenshot(
 def generate_grid_plot(
     step_records: List[Tuple[str, str]],
     output_path: str,
-    main_title: str = "Funnel Algorithm — Step-by-Step Shortest Path Execution",
+    main_title: str = "Funnel Algorithm",
     ncols: Optional[int] = None
 ) -> str:
     """
@@ -95,7 +95,7 @@ def generate_grid_plot(
 
     cell_w = 4.8
     cell_h = 3.2
-    fig_w = cell_w * ncols
+    fig_w = max(11.5, cell_w * ncols)
     fig_h = cell_h * nrows + 1.4
 
     fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h), dpi=180)
@@ -132,27 +132,41 @@ def generate_grid_plot(
             # Hide unused grid cells
             ax.axis('off')
 
-    # Unified Color Legend
+    # Unified Color Legend with logically paired elements in 7 columns (2 rows):
+    # Col 1: Start (S) & Target (T) [Endpoints]
+    # Col 2: Left Chain & Right Chain [Funnel Boundaries]
+    # Col 3: Apex & Shortest Path [Search Apex & Solution Path]
+    # Col 4: Crossing Sightline & Crossed Segment [Boundary Crossing Event]
+    # Col 5: Polygon Boundary & Diagonals [Polygon Geometry & Triangulation]
+    # Col 6: Corridor Triangles & Corridor Path (S→T) [Corridor Strip & Tree Route]
+    # Col 7: Dual Nodes & Dual Tree Edges [Triangulation Dual Tree]
     legend_elements = [
-        Line2D([0], [0], color='#1e40af', lw=2.5, label='Polygon Boundary'),
-        Line2D([0], [0], color='#c3cdda', lw=1.5, linestyle='--', label='Diagonals'),
-        Patch(facecolor='#fef3c7', edgecolor='#e5e7eb', label='Corridor Triangles'),
-        Line2D([0], [0], marker='o', color='none', markerfacecolor='#0ea5e9', markeredgecolor='#0ea5e9', markersize=6, label='Dual Nodes'),
-        Line2D([0], [0], color='#d97706', lw=2.5, label='Corridor Path (S→T)'),
-        Line2D([0], [0], color='#0284c7', lw=3.5, label='Left Chain'),
-        Line2D([0], [0], color='#16a34a', lw=3.5, label='Right Chain'),
-        Line2D([0], [0], marker='o', color='none', markerfacecolor='#ea580c', markeredgecolor='#ea580c', markersize=7, label='Apex'),
-        Line2D([0], [0], color='#e11d48', lw=2, linestyle='--', label='Crossing Sightline'),
-        Line2D([0], [0], color='#be185d', lw=3, label='Crossed Segment'),
-        Line2D([0], [0], color='#dc2626', lw=2.2, label='Shortest Path'),
         Line2D([0], [0], marker='o', color='none', markerfacecolor='#16a34a', markeredgecolor='#16a34a', markersize=7.5, label='Start (S)'),
         Line2D([0], [0], marker='o', color='none', markerfacecolor='#dc2626', markeredgecolor='#dc2626', markersize=7.5, label='Target (T)'),
+
+        Line2D([0], [0], color='#0284c7', lw=3.5, label='Left Chain'),
+        Line2D([0], [0], color='#16a34a', lw=3.5, label='Right Chain'),
+
+        Line2D([0], [0], marker='o', color='none', markerfacecolor='#ea580c', markeredgecolor='#ea580c', markersize=7, label='Apex'),
+        Line2D([0], [0], color='#dc2626', lw=2.2, label='Shortest Path'),
+
+        Line2D([0], [0], color='#e11d48', lw=2, linestyle='--', label='Crossing Sightline'),
+        Line2D([0], [0], color='#be185d', lw=3, label='Crossed Segment'),
+
+        Line2D([0], [0], color='#1e40af', lw=2.5, label='Polygon Boundary'),
+        Line2D([0], [0], color='#c3cdda', lw=1.5, linestyle='--', label='Diagonals'),
+
+        Patch(facecolor='#fef3c7', edgecolor='#e5e7eb', label='Corridor Triangles'),
+        Line2D([0], [0], color='#d97706', lw=2.5, label='Corridor Path (S→T)'),
+
+        Line2D([0], [0], marker='o', color='none', markerfacecolor='#0ea5e9', markeredgecolor='#0ea5e9', markersize=6, label='Dual Nodes'),
+        Line2D([0], [0], color='#9ca3af', lw=1.5, linestyle='--', label='Dual Tree Edges'),
     ]
 
     fig.legend(
         handles=legend_elements,
         loc='lower center',
-        ncol=min(len(legend_elements), 7),
+        ncol=7,
         fontsize=8.5,
         frameon=True,
         facecolor='#f8f9fb',
@@ -228,7 +242,7 @@ class StepRecorder:
 
     def build_grid_plot(
         self,
-        title: str = "Funnel Algorithm — Step-by-Step Shortest Path Execution",
+        title: str = "Funnel Algorithm",
         ncols: Optional[int] = None
     ) -> str:
         """Compiles all recorded steps into grid_plot.png."""

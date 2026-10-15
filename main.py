@@ -190,7 +190,7 @@ class FunnelInteractiveApp:
         default_cols: Optional[int] = None
     ):
         pygame.init()
-        pygame.display.set_caption("Shortest Paths in Simple Polygons — Interactive Funnel Algorithm")
+        pygame.display.set_caption("Funnel Algorithm")
 
         self.fullscreen = fullscreen
         self.width = width
@@ -502,10 +502,7 @@ class FunnelInteractiveApp:
         ncols = max(1, min(ncols, 8))
         self.default_cols = ncols
 
-        poly_n = len(self.ccw_poly) if self.ccw_poly else len(self.vertices)
-        path_len = self.funnel_solver.current_state.path_length if self.funnel_solver else 0.0
-        title = f"Funnel Algorithm Step-by-Step ({poly_n} Vertices, Path Length: {path_len:.2f})"
-
+        title = "Funnel Algorithm"
         grid_file = self.recorder.build_grid_plot(title=title, ncols=ncols)
         self.state = self.prev_state_before_export
         self.status_message = f"Grid plot ({ncols} cols, {len(self.recorder.recorded_steps)} steps) saved: {grid_file}"
@@ -654,7 +651,7 @@ class FunnelInteractiveApp:
                         if self.funnel_solver.is_finished:
                             self.recorder.capture_step(
                                 self.screen, self.header_height, self.footer_height,
-                                f"{step_num:02d}_complete", f"Step {step_num}: Path Complete (Length: {new_st.path_length:.1f})"
+                                f"{step_num:02d}_complete", f"Step {step_num}: Path Complete"
                             )
                             # Automatically prompt for columns upon completing all steps
                             self.open_export_prompt()
@@ -673,8 +670,8 @@ class FunnelInteractiveApp:
 
             elif self.state == STATE_FINISHED and self.funnel_solver:
                 self.status_message = (
-                    f"[Complete] Path length: {self.funnel_solver.current_state.path_length:.2f}. "
-                    f"Press 'E' to export grid plot or 'R' to draw a new polygon."
+                    "[Complete] Shortest path found. "
+                    "Press 'E' to export grid plot or 'R' to draw a new polygon."
                 )
 
     # --- RENDER METHODS ---
@@ -853,7 +850,7 @@ class FunnelInteractiveApp:
         pygame.draw.rect(self.screen, COLOR_PANEL_BG, (0, 0, self.width, self.header_height))
         pygame.draw.line(self.screen, COLOR_PANEL_BORDER, (0, self.header_height), (self.width, self.header_height), 1)
 
-        title = self.font_title.render("Interactive Funnel Algorithm", True, COLOR_TEXT_PRIMARY)
+        title = self.font_title.render("Funnel Algorithm", True, COLOR_TEXT_PRIMARY)
         self.screen.blit(title, (int(20 * self.scale), int(10 * self.scale)))
 
         # Phase indicator badge
@@ -889,9 +886,9 @@ class FunnelInteractiveApp:
                 lx += int(160 * self.scale)
         else:
             legend_items = [
+                ("Apex", COLOR_APEX),
                 ("Left Chain", COLOR_LEFT_CHAIN),
                 ("Right Chain", COLOR_RIGHT_CHAIN),
-                ("Apex", COLOR_APEX),
                 ("Crossing Line", COLOR_CROSSING_LINE),
                 ("Shortest Path", COLOR_PATH),
             ]
