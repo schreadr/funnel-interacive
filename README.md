@@ -9,11 +9,11 @@ An interactive application implementing the **Funnel Algorithm** (Lee & Preparat
 - **Interactive Polygon Drawing**: Left-click to add vertices one by one; right-click to close the polygon. Real-time rubber banding and self-intersection validation.
 - **Automatic Triangulation**: Triangulates the polygon instantly upon closing using the robust **Ear Clipping algorithm** ($O(n^2)$) without requiring user intervention.
 - **Start and Target Declaration ($S$ & $T$)**: Click twice inside the polygon to define the starting point $S$ and destination $T$.
-- **Dual Graph Corridor Search**: Uses BFS on the dual tree of the triangulation to extract the unique sleeve of triangles connecting $S$ and $T$ along with oriented portals.
+- **Dedicated Dual Tree Phase**: Immediately after selecting $S$ and $T$, the application renders the entire **dual tree** of the triangulation (centroids and shared-edge dual links) and highlights the unique tree path connecting $S$ to $T$.
 - **Step-by-Step Funnel Algorithm**:
   - Each step is executed upon pressing **ENTER**.
+  - **Crossing Detection before Apex Move**: Before the apex jumps around a corner, the app explicitly highlights that a sightline from the apex has crossed the opposite boundary (showing the crossed line and the reflex corner), explaining why the apex must advance.
   - Clearly visualizes the **Apex**, the **Left Chain**, the **Right Chain**, the **active Portal**, and the accumulated **Shortest Path**.
-  - Provides a textual explanation of each geometric step (narrowing, tangent finding, or apex crossing).
   - Allows stepping **forward** (`ENTER` / `SPACE`) or **backward** (`←` / `Backspace`).
 - **Quick Presets**: Press `1`, `2`, or `3` to instantly load demo polygons (L-shaped, U-shaped obstacle corridor, and S-shaped maze).
 
@@ -52,36 +52,60 @@ Or run directly using the venv Python binary:
 | **Undo Last Vertex** | `U` or `Backspace` |
 | **Place Start Point (S)** | **Left-Click** inside the polygon (Phase 2) |
 | **Place Target Point (T)** | **Left-Click** inside the polygon (Phase 2) |
+| **Show Funnel (after Dual Tree)** | `ENTER` or `SPACE` |
 | **Execute Next Step** | `ENTER` or `SPACE` |
 | **Step Backward** | `Left Arrow` ($\leftarrow$) or `Backspace` |
+| **Toggle Fullscreen** | `F` or `F11` (native 1:1 pixel rendering) |
+| **Increase Resolution Preset** | `+` / `=` (720p → 900p → 1080p → 1440p → 4K) |
+| **Decrease Resolution Preset** | `-` |
 | **Reset / New Polygon** | `R` |
 | **Load Preset Corridor** | `1` (L-shape), `2` (U-shape), `3` (S-shape) |
 | **Quit** | `ESC` or Close window |
+
+### High Resolution & Launch Options
+
+You can specify resolution at startup:
+
+```bash
+# Default is crisp 1080p (1920x1080)
+.venv/bin/python main.py
+
+# Launch directly in 1440p (2K) or 4K UHD
+.venv/bin/python main.py --res 1440p
+.venv/bin/python main.py --res 4k
+
+# Launch in native fullscreen
+.venv/bin/python main.py --fullscreen
+
+# Match full desktop monitor resolution
+.venv/bin/python main.py --res max
+```
 
 ---
 
 ## Algorithm Pipeline
 
 ```
-[ User Draw Polygon ]
+[ User Draws Polygon ]
        │
        ▼ (Right-Click)
-[ Simplicity Check & Ear Clipping Triangulation ]
+[ Ear Clipping Triangulation ]
        │
        ▼
 [ User clicks S and T ]
        │
        ▼
-[ Dual Graph Search (BFS Tree Path) ]
+[ 1. Display Dual Tree & Corridor Path ] ── (Press ENTER)
        │
        ▼
-[ Extract Directed Portals (Left, Right) ]
+[ 2. Initialize Funnel at S ]
        │
-       ▼
-[ Funnel Stepper (Step-by-step on ENTER) ]
- ├── Update Left Chain / Right Chain
- ├── Check Crossing & Move Apex
- └── Pull String to Target T
+       ▼ (Press ENTER)
+[ 3. Funnel Stepping Loop ]
+       ├── Boundary Narrowing / Widening
+       ├── ⚠ Crossing Detected! (Shows candidate line crossing boundary)
+       ├── Apex Moves to Corner (Shortest path extended)
+       └── Final connection to Target T
 ```
 
 ---

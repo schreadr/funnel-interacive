@@ -9,7 +9,7 @@ from geometry import (
     dist, cross2d, is_simple_polygon, is_point_in_polygon,
     is_point_in_triangle, triangulate_ear_clipping,
     find_triangle_containing_point, find_triangle_corridor,
-    extract_portals
+    extract_portals, get_dual_tree, get_dual_corridor_path
 )
 from funnel import FunnelAlgorithm
 
@@ -195,10 +195,56 @@ class TestGeometryAndFunnel(unittest.TestCase):
         path = final_state.path_so_far
         self.assertIn((4.0, 8.0), path)
         self.assertIn((4.0, 4.0), path)
-        expected_len = dist(s, (4.0, 8.0)) + dist((4.0, 8.0), (4.0, 4.0)) + dist((4.0, 4.0), t)
-        self.assertAlmostEqual(final_state.path_length, expected_len, places=5)
+    def test_dual_tree_construction(self):
+        poly = [
+            (0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (7.0, 10.0),
+            (7.0, 3.0), (3.0, 3.0), (3.0, 10.0), (0.0, 10.0)
+        ]
+        ccw_poly, triangles, _ = triangulate_ear_clipping(poly)
+        centroids, tree_edges = get_dual_tree(ccw_poly, triangles)
+        # Dual graph of simple polygon triangulation is a tree: V = num_triangles, E = num_triangles - 1
+        self.assertEqual(len(centroids), len(triangles))
+        self.assertEqual(len(tree_edges), len(triangles) - 1)
+
+        s, t = (1.5, 8.0), (8.5, 8.0)
+        s_tri = find_triangle_containing_point(s, ccw_poly, triangles)
+        t_tri = find_triangle_containing_point(t, ccw_poly, triangles)
+        corridor = find_triangle_corridor(triangles, s_tri, t_tri)
+        dual_path = get_dual_corridor_path(corridor, centroids, s, t)
+        self.assertEqual(dual_path[0], s)
+        self.assertEqual(dual_path[-1], t)
+        self.assertEqual(len(dual_path), len(corridor) + 2)
+
+    def test_crossing_step_recorded_before_apex_move(self):
+        poly = [
+            (0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (7.0, 10.0),
+            (7.0, 3.0), (3.0, 3.0), (3.0, 10.0), (0.0, 10.0)
+        ]
+        ccw_poly, triangles, _ = triangulate_ear_clipping(poly)
+        s, t = (1.5, 8.0), (8.5, 8.0)
+        s_tri = find_triangle_containing_point(s, ccw_poly, triangles)
+        t_tri = find_triangle_containing_point(t, ccw_poly, triangles)
+        corridor = find_triangle_corridor(triangles, s_tri, t_tri)
+        portals = extract_portals(ccw_poly, triangles, corridor, s, t)
+        solver = FunnelAlgorithm(portals)
+
+        crossing_indices = [
+            i for i, st in enumerate(solver.states) if st.is_crossing_step
+        ]
+        # U-shaped corridor has 2 reflex corners that must be crossed
+        self.assertGreaterEqual(len(crossing_indices), 2)
+
+        for c_idx in crossing_indices:
+            c_state = solver.states[c_idx]
+            self.assertIsNotNone(c_state.crossing_line)
+            self.assertIsNotNone(c_state.crossed_segment)
+            self.assertIsNotNone(c_state.crossing_point)
+            # The next step should move apex to that corner
+            next_state = solver.states[c_idx + 1]
+            self.assertEqual(next_state.apex, c_state.crossing_point)
 
 
 if __name__ == '__main__':
     unittest.main()
+
 

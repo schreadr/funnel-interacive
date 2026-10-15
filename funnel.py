@@ -23,6 +23,13 @@ class FunnelState:
     is_complete: bool = False
     path_length: float = 0.0
 
+    # Fields for showing boundary crossing before apex moves
+    is_crossing_step: bool = False
+    crossing_line: Optional[Tuple[Point, Point]] = None      # Candidate line from apex to new portal vertex
+    crossed_segment: Optional[Tuple[Point, Point]] = None    # Funnel boundary segment being crossed
+    crossing_point: Optional[Point] = None                   # Corner vertex that must become new apex
+    crossing_side: str = ""                                  # "left" or "right"
+
 
 class FunnelAlgorithm:
     """
@@ -188,23 +195,81 @@ class FunnelAlgorithm:
             new_l, new_r = self.portals[i]
             old_l, old_r = self.portals[i - 1]
 
-            desc_parts = []
-
             if new_l != old_l:
                 # Left portal updated
                 crossed = False
                 while len(right_chain) > 1 and cross2d(right_chain[0], right_chain[1], new_l) <= -EPSILON:
-                    right_chain.pop(0)
-                    new_apex = right_chain[0]
-                    path.append(new_apex)
-                    desc_parts.append(
-                        f"Left portal crossed Right chain! Apex moved to ({new_apex[0]:.1f}, {new_apex[1]:.1f})."
+                    corner = right_chain[1]
+                    # 1. Crossing step: Show sightline crossing the right boundary BEFORE apex moves
+                    raw_states.append(
+                        FunnelState(
+                            step_number=len(raw_states),
+                            total_steps=0,
+                            apex=apex,
+                            left_chain=list(left_chain),
+                            right_chain=list(right_chain),
+                            portal_idx=i,
+                            portal=self.portals[i],
+                            path_so_far=list(path),
+                            description=(
+                                f"Line to left portal vertex ({new_l[0]:.1f}, {new_l[1]:.1f}) "
+                                f"crosses right boundary at ({corner[0]:.1f}, {corner[1]:.1f}). "
+                                f"Apex moves to this vertex next."
+                            ),
+                            is_complete=False,
+                            path_length=self._calculate_path_length(path),
+                            is_crossing_step=True,
+                            crossing_line=(apex, new_l),
+                            crossed_segment=(apex, corner),
+                            crossing_point=corner,
+                            crossing_side="right"
+                        )
                     )
+
+                    # 2. Apex move step: Move apex to corner
+                    right_chain.pop(0)
+                    apex = corner
+                    path.append(apex)
                     crossed = True
+                    raw_states.append(
+                        FunnelState(
+                            step_number=len(raw_states),
+                            total_steps=0,
+                            apex=apex,
+                            left_chain=list(left_chain),
+                            right_chain=list(right_chain),
+                            portal_idx=i,
+                            portal=self.portals[i],
+                            path_so_far=list(path),
+                            description=(
+                                f"Apex moved to corner ({apex[0]:.1f}, {apex[1]:.1f})! "
+                                f"Shortest path extended. Funnel re-anchored. Press ENTER to continue."
+                            ),
+                            is_complete=False,
+                            path_length=self._calculate_path_length(path),
+                        )
+                    )
 
                 if crossed:
-                    apex = right_chain[0]
                     left_chain = [apex, new_l]
+                    raw_states.append(
+                        FunnelState(
+                            step_number=len(raw_states),
+                            total_steps=0,
+                            apex=apex,
+                            left_chain=list(left_chain),
+                            right_chain=list(right_chain),
+                            portal_idx=i,
+                            portal=self.portals[i],
+                            path_so_far=list(path),
+                            description=(
+                                f"Funnel re-opened at new Apex ({apex[0]:.1f}, {apex[1]:.1f}) "
+                                f"with Left portal vertex ({new_l[0]:.1f}, {new_l[1]:.1f})."
+                            ),
+                            is_complete=False,
+                            path_length=self._calculate_path_length(path),
+                        )
+                    )
                 else:
                     # Narrow left chain
                     popped_count = 0
@@ -212,30 +277,102 @@ class FunnelAlgorithm:
                         left_chain.pop()
                         popped_count += 1
                     left_chain.append(new_l)
-                    if popped_count > 0:
-                        desc_parts.append(
-                            f"Left portal updated to ({new_l[0]:.1f}, {new_l[1]:.1f}) (tightened {popped_count} vertices)."
+                    desc = (
+                        f"Left portal updated to ({new_l[0]:.1f}, {new_l[1]:.1f}) (tightened {popped_count} vertices)."
+                        if popped_count > 0 else
+                        f"Left portal widened to ({new_l[0]:.1f}, {new_l[1]:.1f})."
+                    )
+                    raw_states.append(
+                        FunnelState(
+                            step_number=len(raw_states),
+                            total_steps=0,
+                            apex=apex,
+                            left_chain=list(left_chain),
+                            right_chain=list(right_chain),
+                            portal_idx=i,
+                            portal=self.portals[i],
+                            path_so_far=list(path),
+                            description=f"Step (Portal {i}): {desc}",
+                            is_complete=False,
+                            path_length=self._calculate_path_length(path),
                         )
-                    else:
-                        desc_parts.append(
-                            f"Left portal widened to ({new_l[0]:.1f}, {new_l[1]:.1f})."
-                        )
+                    )
 
             if new_r != old_r:
                 # Right portal updated
                 crossed = False
                 while len(left_chain) > 1 and cross2d(left_chain[0], left_chain[1], new_r) >= EPSILON:
-                    left_chain.pop(0)
-                    new_apex = left_chain[0]
-                    path.append(new_apex)
-                    desc_parts.append(
-                        f"Right portal crossed Left chain! Apex moved to ({new_apex[0]:.1f}, {new_apex[1]:.1f})."
+                    corner = left_chain[1]
+                    # 1. Crossing step: Show sightline crossing the left boundary BEFORE apex moves
+                    raw_states.append(
+                        FunnelState(
+                            step_number=len(raw_states),
+                            total_steps=0,
+                            apex=apex,
+                            left_chain=list(left_chain),
+                            right_chain=list(right_chain),
+                            portal_idx=i,
+                            portal=self.portals[i],
+                            path_so_far=list(path),
+                            description=(
+                                f"Line to right portal vertex ({new_r[0]:.1f}, {new_r[1]:.1f}) "
+                                f"crosses left boundary at ({corner[0]:.1f}, {corner[1]:.1f}). "
+                                f"Apex moves to this vertex next."
+                            ),
+                            is_complete=False,
+                            path_length=self._calculate_path_length(path),
+                            is_crossing_step=True,
+                            crossing_line=(apex, new_r),
+                            crossed_segment=(apex, corner),
+                            crossing_point=corner,
+                            crossing_side="left"
+                        )
                     )
+
+                    # 2. Apex move step: Move apex to corner
+                    left_chain.pop(0)
+                    apex = corner
+                    path.append(apex)
                     crossed = True
+                    raw_states.append(
+                        FunnelState(
+                            step_number=len(raw_states),
+                            total_steps=0,
+                            apex=apex,
+                            left_chain=list(left_chain),
+                            right_chain=list(right_chain),
+                            portal_idx=i,
+                            portal=self.portals[i],
+                            path_so_far=list(path),
+                            description=(
+                                f"Apex moved to corner ({apex[0]:.1f}, {apex[1]:.1f}). "
+                                f"Funnel re-anchored."
+                            ),
+                            is_complete=False,
+                            path_length=self._calculate_path_length(path),
+                        )
+                    )
 
                 if crossed:
-                    apex = left_chain[0]
                     right_chain = [apex, new_r]
+                    raw_states.append(
+                        FunnelState(
+                            step_number=len(raw_states),
+                            total_steps=0,
+                            apex=apex,
+                            left_chain=list(left_chain),
+                            right_chain=list(right_chain),
+                            portal_idx=i,
+                            portal=self.portals[i],
+                            path_so_far=list(path),
+                            description=(
+                                f"Funnel re-opened at Apex ({apex[0]:.1f}, {apex[1]:.1f}) "
+                                f"with Right portal vertex ({new_r[0]:.1f}, {new_r[1]:.1f})."
+                            ),
+                            is_complete=False,
+                            path_length=self._calculate_path_length(path),
+                        )
+                    )
                 else:
                     # Narrow right chain
                     popped_count = 0
@@ -243,15 +380,30 @@ class FunnelAlgorithm:
                         right_chain.pop()
                         popped_count += 1
                     right_chain.append(new_r)
-                    if popped_count > 0:
-                        desc_parts.append(
-                            f"Right portal updated to ({new_r[0]:.1f}, {new_r[1]:.1f}) (tightened {popped_count} vertices)."
+                    desc = (
+                        f"Right portal updated to ({new_r[0]:.1f}, {new_r[1]:.1f}) (tightened {popped_count} vertices)."
+                        if popped_count > 0 else
+                        f"Right portal widened to ({new_r[0]:.1f}, {new_r[1]:.1f})."
+                    )
+                    raw_states.append(
+                        FunnelState(
+                            step_number=len(raw_states),
+                            total_steps=0,
+                            apex=apex,
+                            left_chain=list(left_chain),
+                            right_chain=list(right_chain),
+                            portal_idx=i,
+                            portal=self.portals[i],
+                            path_so_far=list(path),
+                            description=f"Step (Portal {i}): {desc}",
+                            is_complete=False,
+                            path_length=self._calculate_path_length(path),
                         )
-                    else:
-                        desc_parts.append(
-                            f"Right portal widened to ({new_r[0]:.1f}, {new_r[1]:.1f})."
-                        )
+                    )
 
+        # Final target step: portal is (t, t)
+        while len(left_chain) > 1 and cross2d(left_chain[0], left_chain[1], t) >= EPSILON:
+            corner = left_chain[1]
             raw_states.append(
                 FunnelState(
                     step_number=len(raw_states),
@@ -259,36 +411,89 @@ class FunnelAlgorithm:
                     apex=apex,
                     left_chain=list(left_chain),
                     right_chain=list(right_chain),
-                    portal_idx=i,
-                    portal=self.portals[i],
+                    portal_idx=num_portals - 1,
+                    portal=self.portals[-1],
                     path_so_far=list(path),
-                    description=f"Step {len(raw_states)} (Portal {i}): " + " ".join(desc_parts),
+                    description=(
+                        f"Line to target crosses left boundary at ({corner[0]:.1f}, {corner[1]:.1f}). "
+                        f"Apex moves to this vertex next."
+                    ),
                     is_complete=False,
-                    path_length=self._calculate_path_length(path)
+                    path_length=self._calculate_path_length(path),
+                    is_crossing_step=True,
+                    crossing_line=(apex, t),
+                    crossed_segment=(apex, corner),
+                    crossing_point=corner,
+                    crossing_side="left"
+                )
+            )
+            left_chain.pop(0)
+            apex = corner
+            path.append(apex)
+            raw_states.append(
+                FunnelState(
+                    step_number=len(raw_states),
+                    total_steps=0,
+                    apex=apex,
+                    left_chain=list(left_chain),
+                    right_chain=list(right_chain),
+                    portal_idx=num_portals - 1,
+                    portal=self.portals[-1],
+                    path_so_far=list(path),
+                    description=f"Apex moved to corner ({apex[0]:.1f}, {apex[1]:.1f}) towards Target T.",
+                    is_complete=False,
+                    path_length=self._calculate_path_length(path),
                 )
             )
 
-        # Final target step: portal is (t, t)
-        final_desc = []
-        while len(left_chain) > 1 and cross2d(left_chain[0], left_chain[1], t) >= EPSILON:
-            left_chain.pop(0)
-            new_apex = left_chain[0]
-            path.append(new_apex)
-            final_desc.append(f"Target crossed Left chain! Apex moved to ({new_apex[0]:.1f}, {new_apex[1]:.1f}).")
-
         while len(right_chain) > 1 and cross2d(right_chain[0], right_chain[1], t) <= -EPSILON:
+            corner = right_chain[1]
+            raw_states.append(
+                FunnelState(
+                    step_number=len(raw_states),
+                    total_steps=0,
+                    apex=apex,
+                    left_chain=list(left_chain),
+                    right_chain=list(right_chain),
+                    portal_idx=num_portals - 1,
+                    portal=self.portals[-1],
+                    path_so_far=list(path),
+                    description=(
+                        f"Line to target crosses right boundary at ({corner[0]:.1f}, {corner[1]:.1f}). "
+                        f"Apex moves to this vertex next."
+                    ),
+                    is_complete=False,
+                    path_length=self._calculate_path_length(path),
+                    is_crossing_step=True,
+                    crossing_line=(apex, t),
+                    crossed_segment=(apex, corner),
+                    crossing_point=corner,
+                    crossing_side="right"
+                )
+            )
             right_chain.pop(0)
-            new_apex = right_chain[0]
-            path.append(new_apex)
-            final_desc.append(f"Target crossed Right chain! Apex moved to ({new_apex[0]:.1f}, {new_apex[1]:.1f}).")
+            apex = corner
+            path.append(apex)
+            raw_states.append(
+                FunnelState(
+                    step_number=len(raw_states),
+                    total_steps=0,
+                    apex=apex,
+                    left_chain=list(left_chain),
+                    right_chain=list(right_chain),
+                    portal_idx=num_portals - 1,
+                    portal=self.portals[-1],
+                    path_so_far=list(path),
+                    description=f"Apex moved to corner ({apex[0]:.1f}, {apex[1]:.1f}) towards Target T.",
+                    is_complete=False,
+                    path_length=self._calculate_path_length(path),
+                )
+            )
 
         if path[-1] != t:
             path.append(t)
-            final_desc.append(f"Direct connection to Target T ({t[0]:.1f}, {t[1]:.1f}).")
 
         final_length = self._calculate_path_length(path)
-        final_desc.append(f"Shortest path found! Total length: {final_length:.2f}")
-
         raw_states.append(
             FunnelState(
                 step_number=len(raw_states),
@@ -299,7 +504,7 @@ class FunnelAlgorithm:
                 portal_idx=num_portals - 1,
                 portal=self.portals[-1],
                 path_so_far=list(path),
-                description=f"Final Step: " + " ".join(final_desc),
+                description=f"Final Step: Direct connection from final Apex to Target T! Shortest path complete. Total length: {final_length:.2f}",
                 is_complete=True,
                 path_length=final_length
             )
@@ -311,4 +516,3 @@ class FunnelAlgorithm:
             st.total_steps = total_steps
 
         self.states = raw_states
-

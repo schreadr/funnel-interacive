@@ -415,3 +415,46 @@ def extract_portals(
     portals.append((t, t))
     return portals
 
+
+def get_triangle_centroid(poly: List[Point], tri: Triangle) -> Point:
+    """Calculates the geometric centroid (center of mass) of a triangle."""
+    a, b, c = poly[tri[0]], poly[tri[1]], poly[tri[2]]
+    return ((a[0] + b[0] + c[0]) / 3.0, (a[1] + b[1] + c[1]) / 3.0)
+
+
+def get_dual_tree(
+    poly: List[Point], triangles: List[Triangle]
+) -> Tuple[List[Point], List[Tuple[Point, Point]]]:
+    """
+    Constructs the dual tree of the triangulation.
+    Returns:
+      centroids: list of centroid points for all triangles.
+      tree_edges: list of segments connecting centroids of adjacent triangles.
+    """
+    centroids = [get_triangle_centroid(poly, tri) for tri in triangles]
+    adj = build_dual_graph(triangles)
+    tree_edges: List[Tuple[Point, Point]] = []
+
+    for i in range(len(triangles)):
+        for j, _ in adj[i]:
+            if i < j:
+                tree_edges.append((centroids[i], centroids[j]))
+
+    return centroids, tree_edges
+
+
+def get_dual_corridor_path(
+    corridor: List[int], centroids: List[Point], s: Point, t: Point
+) -> List[Point]:
+    """
+    Returns the sequence of points representing the path through the dual tree:
+    Start s -> centroid of T_0 -> centroid of T_1 -> ... -> centroid of T_m -> Target t.
+    """
+    path = [s]
+    for tri_idx in corridor:
+        if 0 <= tri_idx < len(centroids):
+            path.append(centroids[tri_idx])
+    path.append(t)
+    return path
+
+
