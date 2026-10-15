@@ -262,13 +262,123 @@ class TestGeometryAndFunnel(unittest.TestCase):
             self.assertTrue(os.path.exists(p1))
             self.assertTrue(os.path.exists(p2))
 
-            grid_path = recorder.build_grid_plot(title="Unit Test Grid")
+            grid_path = recorder.build_grid_plot(title="Unit Test Grid", ncols=2)
             self.assertTrue(os.path.exists(grid_path))
             self.assertGreater(os.path.getsize(grid_path), 1000)
+
+    def test_direct_recording_app_workflow(self):
+        """Tests the interactive direct recording, step popping, and column prompt modal flow."""
+        import pygame
+        import tempfile
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+        from main import (
+            FunnelInteractiveApp, STATE_DRAW_POLYGON, STATE_SELECT_START,
+            STATE_SELECT_TARGET, STATE_SHOW_DUAL_TREE, STATE_STEPPING,
+            STATE_FINISHED, STATE_PROMPT_COLUMNS
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            app = FunnelInteractiveApp(
+                width=1280, height=720, record_mode=True, screenshot_folder=tmp_dir
+            )
+            self.assertEqual(app.state, STATE_DRAW_POLYGON)
+
+            # 1. Draw a convex polygon via clicks
+            app.handle_mouse_click((200, 200), 1)
+            app.handle_mouse_click((800, 200), 1)
+            app.handle_mouse_click((800, 500), 1)
+            app.handle_mouse_click((200, 500), 1)
+            app.handle_mouse_click((200, 500), 3)  # Right-click to close
+            self.assertEqual(app.state, STATE_SELECT_START)
+
+            # 2. Select S and T points
+            app.handle_mouse_click((250, 250), 1)  # S
+            self.assertEqual(app.state, STATE_SELECT_TARGET)
+            app.handle_mouse_click((750, 450), 1)  # T
+            self.assertEqual(app.state, STATE_SHOW_DUAL_TREE)
+
+            # Step 0 (Dual Tree) recorded directly
+            self.assertEqual(len(app.recorder.recorded_steps), 1)
+
+            # 3. Advance to Funnel stepping (Step 1 recorded)
+            app.handle_keydown(pygame.K_RETURN)
+            self.assertEqual(app.state, STATE_STEPPING)
+            self.assertEqual(len(app.recorder.recorded_steps), 2)
+
+            # 4. Step backward: verify last step popped
+            app.handle_keydown(pygame.K_BACKSPACE)
+            self.assertEqual(app.state, STATE_SHOW_DUAL_TREE)
+            self.assertEqual(len(app.recorder.recorded_steps), 1)
+
+            # Advance back to stepping
+            app.handle_keydown(pygame.K_RETURN)
+            self.assertEqual(app.state, STATE_STEPPING)
+            self.assertEqual(len(app.recorder.recorded_steps), 2)
+
+            # 5. Step until finished
+            while app.funnel_solver and not app.funnel_solver.is_finished:
+                app.handle_keydown(pygame.K_RETURN)
+
+            # Verify prompt for columns opened automatically upon completion
+            self.assertEqual(app.state, STATE_PROMPT_COLUMNS)
+            self.assertGreaterEqual(len(app.recorder.recorded_steps), 2)
+
+            # 6. Select 3 columns
+            app.handle_keydown(pygame.K_3)
+            self.assertEqual(app.columns_input_str, "3")
+
+            # 7. Confirm export
+            app.handle_keydown(pygame.K_RETURN)
+            self.assertEqual(app.state, STATE_FINISHED)
+
+            # Verify compiled grid plot
+            grid_file = os.path.join(tmp_dir, "grid_plot.png")
+            self.assertTrue(os.path.exists(grid_file))
+            self.assertGreater(os.path.getsize(grid_file), 1000)
+
+            # 8. Re-open export prompt using 'E'
+            app.handle_keydown(pygame.K_e)
+            self.assertEqual(app.state, STATE_PROMPT_COLUMNS)
+
+            # Test Arrow Keys (+/-)
+            app.handle_keydown(pygame.K_UP)
+            self.assertEqual(app.columns_input_str, "4")
+            app.handle_keydown(pygame.K_DOWN)
+            self.assertEqual(app.columns_input_str, "3")
+
+            # Test Cancel via ESC
+            app.handle_keydown(pygame.K_ESCAPE)
+            self.assertEqual(app.state, STATE_FINISHED)
+
+            # 9. Re-open via 'P' and test mouse click on Pill 5 and Export button
+            app.handle_keydown(pygame.K_p)
+            self.assertEqual(app.state, STATE_PROMPT_COLUMNS)
+
+            cx = app.width // 2
+            s = app.scale
+            modal_rect_y = app.height // 2 - int(240 * s) // 2
+            pill_w = int(38 * s)
+            gap = int(10 * s)
+            total_pills_w = 8 * pill_w + 7 * gap
+            pills_x0 = cx - total_pills_w // 2
+            pills_y = modal_rect_y + int(90 * s)
+            p5_x = pills_x0 + 4 * (pill_w + gap) + pill_w // 2
+            p5_y = pills_y + int(10 * s)
+            app.handle_mouse_click((p5_x, p5_y), 1)
+            self.assertEqual(app.columns_input_str, "5")
+
+            # Click export button
+            btn_y = modal_rect_y + int(165 * s) + int(10 * s)
+            btn_exp_w = int(210 * s)
+            btn_exp_x = cx - btn_exp_w - int(10 * s) + btn_exp_w // 2
+            app.handle_mouse_click((btn_exp_x, btn_y), 1)
+            self.assertEqual(app.state, STATE_FINISHED)
+            self.assertEqual(app.default_cols, 5)
 
 
 if __name__ == '__main__':
     unittest.main()
+
 
 
 

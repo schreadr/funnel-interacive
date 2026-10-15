@@ -73,6 +73,7 @@ STATE_SELECT_TARGET = "SELECT_TARGET"
 STATE_SHOW_DUAL_TREE = "SHOW_DUAL_TREE"
 STATE_STEPPING = "STEPPING"
 STATE_FINISHED = "FINISHED"
+STATE_PROMPT_COLUMNS = "PROMPT_COLUMNS"
 
 RESOLUTION_PRESETS = [
     (1280, 720),
@@ -184,8 +185,9 @@ class FunnelInteractiveApp:
         width: int = 1920,
         height: int = 1080,
         fullscreen: bool = False,
-        record_mode: bool = False,
-        screenshot_folder: Optional[str] = None
+        record_mode: bool = True,
+        screenshot_folder: Optional[str] = None,
+        default_cols: Optional[int] = None
     ):
         pygame.init()
         pygame.display.set_caption("Shortest Paths in Simple Polygons — Interactive Funnel Algorithm")
@@ -203,9 +205,12 @@ class FunnelInteractiveApp:
         self.clock = pygame.time.Clock()
         self._update_scale_and_fonts()
 
-        # Step Recording & Screenshot Mode
+        # Step Recording & Screenshot Mode (Direct Recording)
         self.record_mode = record_mode
         self.recorder = StepRecorder(base_folder=screenshot_folder, auto_record=record_mode)
+        self.default_cols = default_cols
+        self.columns_input_str = str(default_cols if default_cols else 4)
+        self.prev_state_before_export = STATE_FINISHED
 
         # State Variables
         self.state = STATE_DRAW_POLYGON
@@ -318,54 +323,8 @@ class FunnelInteractiveApp:
         self.funnel_solver = None
         self.status_message = "Click to add polygon vertices. Right-click to close polygon."
         self.warning_message = None
-
-    def load_preset(self, preset_id: int):
-        """Loads a built-in demo polygon scaled to current canvas dimensions."""
-        self.reset()
-        w, h = self.width, self.height
-        cx, cy = w // 2, h // 2
-        s = self.scale
-
-        if preset_id == 1:
-            # L-shaped corridor
-            self.vertices = [
-                (cx - int(320 * s), cy - int(220 * s)),
-                (cx - int(60 * s), cy - int(220 * s)),
-                (cx - int(60 * s), cy + int(60 * s)),
-                (cx + int(320 * s), cy + int(60 * s)),
-                (cx + int(320 * s), cy + int(240 * s)),
-                (cx - int(320 * s), cy + int(240 * s)),
-            ]
-        elif preset_id == 2:
-            # U-shaped polygon
-            self.vertices = [
-                (cx - int(380 * s), cy - int(240 * s)),
-                (cx - int(160 * s), cy - int(240 * s)),
-                (cx - int(160 * s), cy + int(110 * s)),
-                (cx + int(160 * s), cy + int(110 * s)),
-                (cx + int(160 * s), cy - int(240 * s)),
-                (cx + int(380 * s), cy - int(240 * s)),
-                (cx + int(380 * s), cy + int(260 * s)),
-                (cx - int(380 * s), cy + int(260 * s)),
-            ]
-        elif preset_id == 3:
-            # S-shaped labyrinth corridor with two internal baffles
-            self.vertices = [
-                (cx - int(360 * s), cy - int(200 * s)),
-                (cx + int(360 * s), cy - int(200 * s)),
-                (cx + int(360 * s), cy + int(60 * s)),
-                (cx - int(150 * s), cy + int(60 * s)),
-                (cx - int(150 * s), cy + int(100 * s)),
-                (cx + int(360 * s), cy + int(100 * s)),
-                (cx + int(360 * s), cy + int(220 * s)),
-                (cx - int(360 * s), cy + int(220 * s)),
-                (cx - int(360 * s), cy - int(60 * s)),
-                (cx + int(150 * s), cy - int(60 * s)),
-                (cx + int(150 * s), cy - int(100 * s)),
-                (cx - int(360 * s), cy - int(100 * s)),
-            ]
-
-        self._close_polygon_and_triangulate()
+        if self.record_mode and self.recorder:
+            self.recorder.reset_session()
 
     def _close_polygon_and_triangulate(self):
         """Validates polygon, runs ear clipping triangulation, and transitions to point selection."""
@@ -389,6 +348,52 @@ class FunnelInteractiveApp:
 
     def handle_mouse_click(self, pos: Point, button: int):
         x, y = float(pos[0]), float(pos[1])
+
+        if self.state == STATE_PROMPT_COLUMNS:
+            cx = self.width // 2
+            cy = self.height // 2
+            s = self.scale
+            mw = int(460 * s)
+            mh = int(240 * s)
+            modal_rect = pygame.Rect(cx - mw // 2, cy - mh // 2, mw, mh)
+
+            # Check click outside modal -> cancel
+            if not modal_rect.collidepoint((x, y)):
+                self.state = self.prev_state_before_export
+                return
+
+            # Check pill clicks (1..8)
+            pill_w = int(38 * s)
+            pill_h = int(38 * s)
+            gap = int(10 * s)
+            total_pills_w = 8 * pill_w + 7 * gap
+            pills_x0 = cx - total_pills_w // 2
+            pills_y = modal_rect.y + int(90 * s)
+
+            for i in range(1, 9):
+                px = pills_x0 + (i - 1) * (pill_w + gap)
+                p_rect = pygame.Rect(px, pills_y, pill_w, pill_h)
+                if p_rect.collidepoint((x, y)):
+                    self.columns_input_str = str(i)
+                    return
+
+            # Check Export button click
+            btn_y = modal_rect.y + int(165 * s)
+            btn_exp_w = int(210 * s)
+            btn_h = int(40 * s)
+            btn_exp_rect = pygame.Rect(cx - btn_exp_w - int(10 * s), btn_y, btn_exp_w, btn_h)
+            if btn_exp_rect.collidepoint((x, y)):
+                self.confirm_export_grid()
+                return
+
+            # Check Cancel button click
+            btn_can_w = int(120 * s)
+            btn_can_rect = pygame.Rect(cx + int(10 * s), btn_y, btn_can_w, btn_h)
+            if btn_can_rect.collidepoint((x, y)):
+                self.state = self.prev_state_before_export
+                return
+
+            return
 
         # Ignore clicks in header or footer panel
         if y < self.header_height or y > self.height - self.footer_height:
@@ -468,87 +473,81 @@ class FunnelInteractiveApp:
                         "00_dual_tree", "Step 0: Dual Tree & Corridor Path"
                     )
 
-    def export_all_steps_grid(self, custom_folder: Optional[str] = None) -> Optional[str]:
-        """
-        Automatically steps through the entire funnel algorithm for current polygon and S/T,
-        captures cropped screenshots for each step (drawing only), compiles a grid plot with a unified legend,
-        and restores the application state.
-        """
-        if not self.funnel_solver or not self.portals or self.start_point is None or self.target_point is None:
-            self.set_warning("Must declare polygon, Start (S), and Target (T) first!")
+    def open_export_prompt(self):
+        """Opens interactive modal to specify number of columns for grid plot."""
+        if not self.recorder or not self.recorder.recorded_steps:
+            self.set_warning("No steps recorded yet. Place S and T and step through to record steps.")
+            return
+
+        self.prev_state_before_export = self.state
+        self.state = STATE_PROMPT_COLUMNS
+        default_c = self.default_cols if self.default_cols is not None else 4
+        self.columns_input_str = str(default_c)
+        self.status_message = "Enter number of columns for grid plot (1 - 8), then press ENTER to export."
+
+    def confirm_export_grid(self, custom_cols: Optional[int] = None) -> Optional[str]:
+        """Generates grid plot using the user-specified column count."""
+        if not self.recorder or not self.recorder.recorded_steps:
+            self.state = self.prev_state_before_export
             return None
 
-        prev_state = self.state
-        prev_step_idx = self.funnel_solver.current_step_index
+        if custom_cols is not None:
+            ncols = custom_cols
+        else:
+            try:
+                ncols = int(self.columns_input_str)
+            except ValueError:
+                ncols = self.default_cols if self.default_cols is not None else 4
 
-        rec = StepRecorder(base_folder=custom_folder)
-        rec.reset_session(custom_folder)
+        ncols = max(1, min(ncols, 8))
+        self.default_cols = ncols
 
-        # 1. Capture Step 0: Dual Tree & Corridor
-        self.state = STATE_SHOW_DUAL_TREE
-        self.screen.fill(COLOR_BG)
-        self.draw_polygon_and_triangulation()
-        self.draw_dual_tree()
-        self.draw_start_and_target()
-        rec.capture_step(
-            self.screen, self.header_height, self.footer_height,
-            "00_dual_tree", "Step 0: Dual Tree & Corridor Path"
-        )
+        poly_n = len(self.ccw_poly) if self.ccw_poly else len(self.vertices)
+        path_len = self.funnel_solver.current_state.path_length if self.funnel_solver else 0.0
+        title = f"Funnel Algorithm Step-by-Step ({poly_n} Vertices, Path Length: {path_len:.2f})"
 
-        # 2. Iterate through all Funnel states
-        self.state = STATE_STEPPING
-        solver = FunnelAlgorithm(self.portals)
-        total_steps = solver.total_steps
-
-        for step_i in range(total_steps):
-            self.funnel_solver = solver
-            curr = solver.current_state
-
-            self.screen.fill(COLOR_BG)
-            self.draw_polygon_and_triangulation()
-            self.draw_dual_tree()
-            self.draw_funnel_state()
-            self.draw_start_and_target()
-
-            step_num = step_i + 1
-            if step_i == total_steps - 1:
-                caption = f"Step {step_num}: Path Complete ({curr.path_length:.1f})"
-                tag = f"{step_num:02d}_complete"
-            elif curr.is_crossing_step:
-                caption = f"Step {step_num}: Sightline Crosses Boundary"
-                tag = f"{step_num:02d}_crossing"
-            elif step_i == 0:
-                caption = f"Step 1: Funnel Initialized at S"
-                tag = f"01_init"
-            else:
-                caption = f"Step {step_num}: Portal {curr.portal_idx} Updated"
-                tag = f"{step_num:02d}_step"
-
-            rec.capture_step(
-                self.screen, self.header_height, self.footer_height,
-                tag, caption
-            )
-
-            if not solver.is_finished:
-                solver.step_forward()
-
-        # 3. Build Grid Plot with unified legend
-        poly_n = len(self.ccw_poly)
-        grid_file = rec.build_grid_plot(
-            title=f"Funnel Algorithm Step-by-Step ({poly_n} Vertices, Path Length: {solver.current_state.path_length:.2f})"
-        )
-
-        # 4. Restore original state
-        self.state = prev_state
-        self.funnel_solver = FunnelAlgorithm(self.portals)
-        for _ in range(prev_step_idx):
-            if not self.funnel_solver.is_finished:
-                self.funnel_solver.step_forward()
-
-        self.status_message = f"Screenshots ({len(rec.recorded_steps)}) & grid saved: {grid_file}"
+        grid_file = self.recorder.build_grid_plot(title=title, ncols=ncols)
+        self.state = self.prev_state_before_export
+        self.status_message = f"Grid plot ({ncols} cols, {len(self.recorder.recorded_steps)} steps) saved: {grid_file}"
         return grid_file
 
     def handle_keydown(self, key: int):
+        # Handle input when Column Prompt Modal is open
+        if self.state == STATE_PROMPT_COLUMNS:
+            if key == pygame.K_ESCAPE:
+                self.state = self.prev_state_before_export
+                self.status_message = "Grid export canceled."
+                return
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.confirm_export_grid()
+                return
+            elif key in (pygame.K_BACKSPACE, pygame.K_DELETE):
+                self.columns_input_str = self.columns_input_str[:-1]
+                return
+            elif key in (
+                pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8,
+                pygame.K_KP1, pygame.K_KP2, pygame.K_KP3, pygame.K_KP4, pygame.K_KP5, pygame.K_KP6, pygame.K_KP7, pygame.K_KP8
+            ):
+                digit_char = pygame.key.name(key)[-1]
+                self.columns_input_str = digit_char
+                return
+            elif key in (pygame.K_UP, pygame.K_RIGHT, pygame.K_PLUS, pygame.K_EQUALS):
+                try:
+                    val = int(self.columns_input_str)
+                except ValueError:
+                    val = 4
+                self.columns_input_str = str(min(8, val + 1))
+                return
+            elif key in (pygame.K_DOWN, pygame.K_LEFT, pygame.K_MINUS, pygame.K_UNDERSCORE):
+                try:
+                    val = int(self.columns_input_str)
+                except ValueError:
+                    val = 4
+                self.columns_input_str = str(max(1, val - 1))
+                return
+            return
+
+        # Global Hotkeys
         if key == pygame.K_ESCAPE:
             pygame.quit()
             sys.exit()
@@ -573,19 +572,15 @@ class FunnelInteractiveApp:
         elif key == pygame.K_r:
             self.reset()
 
-        elif key in (pygame.K_p, pygame.K_g):
-            self.export_all_steps_grid()
+        elif key in (pygame.K_e, pygame.K_p):
+            self.open_export_prompt()
 
         elif key == pygame.K_s:
             self.record_mode = not self.record_mode
             status_txt = "ON" if self.record_mode else "OFF"
-            self.status_message = f"Step screenshot recording is now {status_txt}. (Press 'P' to export all steps immediately)."
+            self.status_message = f"Step screenshot recording is now {status_txt}. (Press 'E' to export recorded steps to grid)."
 
-        elif key in (pygame.K_1, pygame.K_2, pygame.K_3):
-            preset_map = {pygame.K_1: 1, pygame.K_2: 2, pygame.K_3: 3}
-            self.load_preset(preset_map[key])
-
-        elif key in (pygame.K_u, pygame.K_BACKSPACE):
+        elif key in (pygame.K_u, pygame.K_BACKSPACE, pygame.K_LEFT):
             if self.state == STATE_DRAW_POLYGON and self.vertices:
                 self.vertices.pop()
                 self.status_message = f"Removed last vertex. {len(self.vertices)} vertices remaining."
@@ -598,14 +593,20 @@ class FunnelInteractiveApp:
                 self.dual_edges.clear()
                 self.dual_path.clear()
                 self.funnel_solver = None
+                if self.record_mode and self.recorder:
+                    self.recorder.pop_last_step()
                 self.state = STATE_SELECT_TARGET
                 self.status_message = "Start point S selected. Click inside polygon to place Target (T)."
             elif self.state in (STATE_STEPPING, STATE_FINISHED) and self.funnel_solver:
                 if self.funnel_solver.current_step_index == 0:
+                    if self.record_mode and self.recorder:
+                        self.recorder.pop_last_step()
                     self.state = STATE_SHOW_DUAL_TREE
                     self.status_message = "Dual Tree displayed. Press ENTER to show the Funnel Algorithm."
                 else:
                     self.funnel_solver.step_backward()
+                    if self.record_mode and self.recorder:
+                        self.recorder.pop_last_step()
                     self.state = STATE_STEPPING
                     curr = self.funnel_solver.current_state
                     self.status_message = f"[Step {curr.step_number}/{curr.total_steps - 1}] {curr.description}"
@@ -618,7 +619,7 @@ class FunnelInteractiveApp:
                     f"[Step 0/{curr.total_steps - 1}] {curr.description} "
                     f"(Press ENTER to continue)"
                 )
-                if self.record_mode:
+                if self.record_mode and self.recorder:
                     self.screen.fill(COLOR_BG)
                     self.draw_polygon_and_triangulation()
                     self.draw_dual_tree()
@@ -635,7 +636,7 @@ class FunnelInteractiveApp:
                     if self.funnel_solver.is_finished:
                         self.state = STATE_FINISHED
                         self.status_message = (
-                            f"[Complete] {new_st.description} | Press 'R' to reset and draw a new polygon."
+                            f"[Complete] {new_st.description} | Press 'E' to export grid plot or 'R' to reset."
                         )
                     else:
                         self.status_message = (
@@ -643,7 +644,7 @@ class FunnelInteractiveApp:
                             f"(Press ENTER to continue)"
                         )
 
-                    if self.record_mode:
+                    if self.record_mode and self.recorder:
                         self.screen.fill(COLOR_BG)
                         self.draw_polygon_and_triangulation()
                         self.draw_dual_tree()
@@ -655,8 +656,8 @@ class FunnelInteractiveApp:
                                 self.screen, self.header_height, self.footer_height,
                                 f"{step_num:02d}_complete", f"Step {step_num}: Path Complete (Length: {new_st.path_length:.1f})"
                             )
-                            grid_p = self.recorder.build_grid_plot()
-                            self.status_message = f"[Complete] Grid plot saved to: {grid_p}"
+                            # Automatically prompt for columns upon completing all steps
+                            self.open_export_prompt()
                         elif new_st.is_crossing_step:
                             self.recorder.capture_step(
                                 self.screen, self.header_height, self.footer_height,
@@ -673,7 +674,7 @@ class FunnelInteractiveApp:
             elif self.state == STATE_FINISHED and self.funnel_solver:
                 self.status_message = (
                     f"[Complete] Path length: {self.funnel_solver.current_state.path_length:.2f}. "
-                    f"Press 'R' to draw a new polygon."
+                    f"Press 'E' to export grid plot or 'R' to draw a new polygon."
                 )
 
     # --- RENDER METHODS ---
@@ -918,11 +919,91 @@ class FunnelInteractiveApp:
         res_info = f"{self.width}x{self.height}"
         rec_status = "ON" if self.record_mode else "OFF"
         controls = (
-            f"[ENTER]: Next | [←]: Back | [P]: Export Grid | "
-            f"[S]: Rec ({rec_status}) | [1/2/3]: Presets | [F]: Fullscreen | [+/-]: Res ({res_info})"
+            f"[ENTER]: Next | [←/Backspace]: Back | [E/P]: Export Grid Plot | "
+            f"[S]: Rec ({rec_status}) | [R]: Reset | [F]: Fullscreen | [+/-]: Res ({res_info})"
         )
         ctrl_surf = self.font_small.render(controls, True, COLOR_TEXT_SECONDARY)
         self.screen.blit(ctrl_surf, (int(20 * self.scale), panel_y + int(44 * self.scale)))
+
+    def draw_column_prompt_modal(self):
+        """Renders an interactive modal dialog to select the number of columns (1 - 8) for grid plot."""
+        # 1. Dim background
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((15, 23, 42, 130))  # Semi-transparent dark slate overlay
+        self.screen.blit(overlay, (0, 0))
+
+        cx = self.width // 2
+        cy = self.height // 2
+        s = self.scale
+
+        mw = int(460 * s)
+        mh = int(240 * s)
+        modal_rect = pygame.Rect(cx - mw // 2, cy - mh // 2, mw, mh)
+
+        # Modal shadow & background
+        shadow_rect = modal_rect.inflate(int(8 * s), int(8 * s))
+        pygame.draw.rect(self.screen, (0, 0, 0, 35), shadow_rect, border_radius=int(14 * s))
+        pygame.draw.rect(self.screen, COLOR_BG, modal_rect, border_radius=int(12 * s))
+        pygame.draw.rect(self.screen, COLOR_PANEL_BORDER, modal_rect, width=int(1.5 * s), border_radius=int(12 * s))
+
+        # Header Title
+        title_surf = self.font_title.render("Export Grid Plot", True, COLOR_TEXT_PRIMARY)
+        self.screen.blit(title_surf, (cx - title_surf.get_width() // 2, modal_rect.y + int(20 * s)))
+
+        # Subtitle
+        n_steps = len(self.recorder.recorded_steps) if self.recorder else 0
+        sub_text = f"Recorded {n_steps} steps. Select number of columns in plot (1 – 8):"
+        sub_surf = self.font_small.render(sub_text, True, COLOR_TEXT_SECONDARY)
+        self.screen.blit(sub_surf, (cx - sub_surf.get_width() // 2, modal_rect.y + int(56 * s)))
+
+        # Selected column value
+        try:
+            curr_cols = int(self.columns_input_str)
+        except ValueError:
+            curr_cols = self.default_cols if self.default_cols else 4
+
+        # Render 8 Column Selection Pills: [1] [2] [3] [4] [5] [6] [7] [8]
+        pill_w = int(38 * s)
+        pill_h = int(38 * s)
+        gap = int(10 * s)
+        total_pills_w = 8 * pill_w + 7 * gap
+        pills_x0 = cx - total_pills_w // 2
+        pills_y = modal_rect.y + int(92 * s)
+
+        for i in range(1, 9):
+            px = pills_x0 + (i - 1) * (pill_w + gap)
+            p_rect = pygame.Rect(px, pills_y, pill_w, pill_h)
+            is_active = (i == curr_cols)
+
+            if is_active:
+                pygame.draw.rect(self.screen, COLOR_TEXT_ACCENT, p_rect, border_radius=int(8 * s))
+                txt_col = (255, 255, 255)
+            else:
+                pygame.draw.rect(self.screen, COLOR_PANEL_BG, p_rect, border_radius=int(8 * s))
+                pygame.draw.rect(self.screen, COLOR_PANEL_BORDER, p_rect, width=int(1 * s), border_radius=int(8 * s))
+                txt_col = COLOR_TEXT_PRIMARY
+
+            lbl = self.font_bold.render(str(i), True, txt_col)
+            self.screen.blit(lbl, (px + (pill_w - lbl.get_width()) // 2, pills_y + (pill_h - lbl.get_height()) // 2))
+
+        # Bottom Buttons: [ Export Plot (ENTER) ]   [ Cancel (ESC) ]
+        btn_y = modal_rect.y + int(165 * s)
+
+        # Export Button
+        btn_exp_w = int(210 * s)
+        btn_h = int(40 * s)
+        btn_exp_rect = pygame.Rect(cx - btn_exp_w - int(10 * s), btn_y, btn_exp_w, btn_h)
+        pygame.draw.rect(self.screen, COLOR_TEXT_ACCENT, btn_exp_rect, border_radius=int(8 * s))
+        exp_lbl = self.font_bold.render(f"Export ({curr_cols} cols) [ENTER]", True, (255, 255, 255))
+        self.screen.blit(exp_lbl, (btn_exp_rect.x + (btn_exp_w - exp_lbl.get_width()) // 2, btn_y + (btn_h - exp_lbl.get_height()) // 2))
+
+        # Cancel Button
+        btn_can_w = int(120 * s)
+        btn_can_rect = pygame.Rect(cx + int(10 * s), btn_y, btn_can_w, btn_h)
+        pygame.draw.rect(self.screen, COLOR_PANEL_BG, btn_can_rect, border_radius=int(8 * s))
+        pygame.draw.rect(self.screen, COLOR_PANEL_BORDER, btn_can_rect, width=int(1 * s), border_radius=int(8 * s))
+        can_lbl = self.font_normal.render("Cancel [ESC]", True, COLOR_TEXT_SECONDARY)
+        self.screen.blit(can_lbl, (btn_can_rect.x + (btn_can_w - can_lbl.get_width()) // 2, btn_y + (btn_h - can_lbl.get_height()) // 2))
 
     def run(self):
         """Main game/application loop."""
@@ -951,6 +1032,9 @@ class FunnelInteractiveApp:
             self.draw_start_and_target()
             self.draw_hud()
 
+            if self.state == STATE_PROMPT_COLUMNS:
+                self.draw_column_prompt_modal()
+
             pygame.display.flip()
             self.clock.tick(60)
 
@@ -967,16 +1051,16 @@ def parse_args():
     parser.add_argument("--height", type=int, default=None, help="Window height in pixels")
     parser.add_argument("--fullscreen", action="store_true", help="Start in native fullscreen mode")
     parser.add_argument(
-        "--record", nargs="?", const="", default=None,
-        help="Enable step screenshot recording mode (optional: output folder path)"
+        "--no-record", action="store_true",
+        help="Disable automatic direct step screenshot recording (enabled by default)"
     )
     parser.add_argument(
-        "--screenshots", nargs="?", const="", default=None,
-        help="Alias for --record (optional: output folder path)"
+        "--screenshots", "--record", dest="record_folder", type=str, default=None,
+        help="Custom output folder path for direct step screenshots and grid plot"
     )
     parser.add_argument(
-        "--export-grid", type=int, choices=[1, 2, 3], default=None,
-        help="Load preset (1, 2, or 3), export all step screenshots and grid_plot.png, then exit"
+        "--cols", "--columns", type=int, default=None,
+        help="Default number of columns for grid plot (1-8)"
     )
     return parser.parse_args()
 
@@ -1027,31 +1111,13 @@ if __name__ == "__main__":
     if args.height:
         height = args.height
 
-    rec_arg = args.record if args.record is not None else args.screenshots
-    record_mode = rec_arg is not None
-    rec_folder = rec_arg if (rec_arg and len(rec_arg) > 0) else None
+    record_mode = not args.no_record
+    rec_folder = args.record_folder if (args.record_folder and len(args.record_folder) > 0) else None
 
     app = FunnelInteractiveApp(
         width=width, height=height, fullscreen=args.fullscreen,
-        record_mode=record_mode, screenshot_folder=rec_folder
+        record_mode=record_mode, screenshot_folder=rec_folder,
+        default_cols=args.cols
     )
-
-    if args.export_grid is not None:
-        app.load_preset(args.export_grid)
-        cx, cy = app.width // 2, app.height // 2
-        s = app.scale
-        if args.export_grid == 1:
-            app.handle_mouse_click((cx - int(220 * s), cy - int(140 * s)), 1)
-            app.handle_mouse_click((cx + int(220 * s), cy + int(140 * s)), 1)
-        elif args.export_grid == 2:
-            app.handle_mouse_click((cx - int(280 * s), cy - int(160 * s)), 1)
-            app.handle_mouse_click((cx + int(280 * s), cy - int(160 * s)), 1)
-        elif args.export_grid == 3:
-            app.handle_mouse_click((cx - int(280 * s), cy - int(150 * s)), 1)
-            app.handle_mouse_click((cx - int(280 * s), cy + int(160 * s)), 1)
-
-        grid_path = app.export_all_steps_grid(custom_folder=rec_folder)
-        print(f"Exported all steps and generated grid plot at:\n  {grid_path}")
-        sys.exit(0)
 
     app.run()

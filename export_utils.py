@@ -49,7 +49,8 @@ def save_canvas_screenshot(
 def generate_grid_plot(
     step_records: List[Tuple[str, str]],
     output_path: str,
-    main_title: str = "Funnel Algorithm — Step-by-Step Shortest Path Execution"
+    main_title: str = "Funnel Algorithm — Step-by-Step Shortest Path Execution",
+    ncols: Optional[int] = None
 ) -> str:
     """
     Combines step screenshot images into an publication-quality grid plot with a unified legend.
@@ -58,6 +59,7 @@ def generate_grid_plot(
         step_records: List of (image_file_path, step_title_or_caption)
         output_path: Destination filepath for the compiled grid PNG
         main_title: Main title rendered at the top of the grid figure
+        ncols: Optional specific number of columns for the grid layout
 
     Returns:
         The absolute path to the generated grid plot image.
@@ -68,24 +70,28 @@ def generate_grid_plot(
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
-    # Dynamic grid dimensions
-    if n_steps == 1:
-        ncols, nrows = 1, 1
-    elif n_steps == 2:
-        ncols, nrows = 2, 1
-    elif n_steps in (3, 4):
-        ncols, nrows = 2, 2
-    elif n_steps in (5, 6):
-        ncols, nrows = 3, 2
-    elif n_steps in (7, 8):
-        ncols, nrows = 4, 2
-    elif n_steps in (9, 10, 11, 12):
-        ncols, nrows = 4, 3
-    elif n_steps in (13, 14, 15, 16):
-        ncols, nrows = 4, 4
-    else:
-        ncols = 5
+    # Determine grid dimensions (custom or dynamic)
+    if ncols is not None and ncols >= 1:
+        ncols = max(1, min(ncols, 12))
         nrows = math.ceil(n_steps / ncols)
+    else:
+        if n_steps == 1:
+            ncols, nrows = 1, 1
+        elif n_steps == 2:
+            ncols, nrows = 2, 1
+        elif n_steps in (3, 4):
+            ncols, nrows = 2, 2
+        elif n_steps in (5, 6):
+            ncols, nrows = 3, 2
+        elif n_steps in (7, 8):
+            ncols, nrows = 4, 2
+        elif n_steps in (9, 10, 11, 12):
+            ncols, nrows = 4, 3
+        elif n_steps in (13, 14, 15, 16):
+            ncols, nrows = 4, 4
+        else:
+            ncols = 4
+            nrows = math.ceil(n_steps / ncols)
 
     cell_w = 4.8
     cell_h = 3.2
@@ -167,6 +173,7 @@ class StepRecorder:
 
     def __init__(self, base_folder: Optional[str] = None, auto_record: bool = False):
         self.auto_record = auto_record
+        self.base_folder = base_folder
         if base_folder:
             self.folder = base_folder
         else:
@@ -180,6 +187,8 @@ class StepRecorder:
         """Starts a fresh recording session."""
         if new_folder:
             self.folder = new_folder
+        elif self.base_folder:
+            self.folder = self.base_folder
         else:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.folder = os.path.join("screenshots", f"run_{timestamp}")
@@ -203,10 +212,28 @@ class StepRecorder:
         self._step_counter += 1
         return filepath
 
-    def build_grid_plot(self, title: str = "Funnel Algorithm — Step-by-Step Shortest Path Execution") -> str:
+    def pop_last_step(self) -> Optional[Tuple[str, str]]:
+        """Removes the last captured step record (e.g. on step backward)."""
+        if self.recorded_steps:
+            last_entry = self.recorded_steps.pop()
+            path, _ = last_entry
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+            self._step_counter = max(0, self._step_counter - 1)
+            return last_entry
+        return None
+
+    def build_grid_plot(
+        self,
+        title: str = "Funnel Algorithm — Step-by-Step Shortest Path Execution",
+        ncols: Optional[int] = None
+    ) -> str:
         """Compiles all recorded steps into grid_plot.png."""
         if not self.recorded_steps:
             return ""
         grid_file = os.path.join(self.folder, "grid_plot.png")
-        return generate_grid_plot(self.recorded_steps, grid_file, main_title=title)
+        return generate_grid_plot(self.recorded_steps, grid_file, main_title=title, ncols=ncols)
 

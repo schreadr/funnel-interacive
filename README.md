@@ -15,7 +15,10 @@ An interactive application implementing the **Funnel Algorithm** (Lee & Preparat
   - **Crossing Detection before Apex Move**: Before the apex jumps around a corner, the app explicitly highlights that a sightline from the apex has crossed the opposite boundary (showing the crossed line and the reflex corner), explaining why the apex must advance.
   - Clearly visualizes the **Apex**, the **Left Chain**, the **Right Chain**, the **active Portal**, and the accumulated **Shortest Path**.
   - Allows stepping **forward** (`ENTER` / `SPACE`) or **backward** (`←` / `Backspace`).
-- **Quick Presets**: Press `1`, `2`, or `3` to instantly load demo polygons (L-shaped, U-shaped obstacle corridor, and S-shaped maze).
+- **Direct Recording & Grid Plot Export**:
+  - Automatically records cropped screenshots of your drawn polygon for each step (drawing area only, without UI header/footer bars).
+  - When completing the final step (or pressing `E` / `P`), an interactive in-app modal prompts for the desired **number of columns (1 – 8)**.
+  - Automatically arranges all recorded steps into a publication-quality `grid_plot.png` with step titles and a unified legend.
 
 ---
 
@@ -54,40 +57,45 @@ Or run directly using the venv Python binary:
 | **Place Target Point (T)** | **Left-Click** inside the polygon (Phase 2) |
 | **Show Funnel (after Dual Tree)** | `ENTER` or `SPACE` |
 | **Execute Next Step** | `ENTER` or `SPACE` |
-| **Step Backward** | `Left Arrow` ($\leftarrow$) or `Backspace` |
-| **Export All Steps Grid Plot** | `P` or `G` (exports cropped step screenshots & `grid_plot.png`) |
-| **Toggle Live Step Recording** | `S` (captures drawing on each forward step) |
+| **Step Backward** | `Left Arrow` ($\leftarrow$) or `Backspace` (pops undone step) |
+| **Export Grid Plot** | `E` or `P` (prompts for columns: `1 - 8`, then saves `grid_plot.png`) |
+| **Toggle Direct Recording** | `S` (captures drawing on each step, ON by default) |
 | **Toggle Fullscreen** | `F` or `F11` (native 1:1 pixel rendering) |
 | **Increase Resolution Preset** | `+` / `=` (720p → 900p → 1080p → 1440p → 4K) |
 | **Decrease Resolution Preset** | `-` |
 | **Reset / New Polygon** | `R` |
-| **Load Preset Corridor** | `1` (L-shape), `2` (U-shape), `3` (S-shape) |
 | **Quit** | `ESC` or Close window |
 
-### Step Screenshots & Grid Plot Export
+### Direct Recording & Column Selection on Export
 
-You can record every step or export a unified step-by-step summary grid plot (drawing area only, without UI header/footer bars):
+Every step you perform on your drawn polygon is directly captured:
+1. **Step 0**: Dual Tree & corridor path upon placing $S$ and $T$.
+2. **Step 1**: Funnel initialized at Start $S$.
+3. **Steps 2..N**: Dynamic portal updates, chain narrowing/widening, and boundary crossing visualization.
+4. **Final Step**: Shortest path complete to Target $T$.
+
+When the path completes (or when you press `E` / `P`), an in-app modal opens asking for the **number of columns in the plot**:
+- Click any pill `[1]` through `[8]` or type `1`–`8` on your keyboard.
+- Use `Up`/`Down` or `+`/`-` to increment/decrement.
+- Press `ENTER` to confirm export, or `ESC` to cancel.
+
+You can also specify a default column count via CLI:
 
 ```bash
-# 1. Start with live step recording enabled
-.venv/bin/python main.py --record screenshots/my_run
+# Set default export grid layout to 3 columns
+.venv/bin/python main.py --cols 3
 
-# 2. Automatically load a preset, export all steps, and generate grid_plot.png
-.venv/bin/python main.py --export-grid 1 --screenshots screenshots/preset1
-.venv/bin/python main.py --export-grid 2 --screenshots screenshots/preset2
-.venv/bin/python main.py --export-grid 3 --screenshots screenshots/preset3
-
-# 3. Interactive shortcut:
-# Press 'P' at any time while running to export all steps and the grid plot!
+# Save direct recording screenshots to a custom folder
+.venv/bin/python main.py --record screenshots/my_custom_run
 ```
 
-The exported folder contains:
+The exported session folder contains:
 - `step_00_dual_tree.png`: Pure drawing of the triangulation dual tree and corridor path.
 - `step_01_funnel_init.png`: Initial funnel state at Start $S$.
 - `step_XX_step.png`: Intermediate funnel states and portal updates.
 - `step_XX_crossing.png`: Explicit crossing detection before apex moves.
 - `step_XX_complete.png`: Complete shortest path to Target $T$.
-- `grid_plot.png`: Publication-ready grid figure compiling all step drawings with titles and a comprehensive unified legend.
+- `grid_plot.png`: Publication-ready grid figure compiling all step drawings with titles, user-specified columns, and a comprehensive unified legend.
 
 ### High Resolution & Launch Options
 
