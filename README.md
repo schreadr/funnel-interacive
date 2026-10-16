@@ -1,6 +1,6 @@
 # Interactive Funnel Algorithm: Shortest Paths in Simple Polygons
 
-An interactive application implementing the **Funnel Algorithm** (Lee & Preparata, 1984 / Chazelle, 1982) to find Euclidean shortest paths inside simple polygons.
+An interactive application implementing the **Funnel Algorithm** to find Euclidean shortest paths inside simple polygons. The App was Vibe-coded, no guarantee for correctness.
 
 ---
 
